@@ -7,18 +7,14 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// Обслуживаем статические файлы из папки public
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Хранилище подключенных клиентов
-const clients = new Map(); // key: ws, value: { name: string, id: string }
+const clients = new Map();
 
-// Генерация простого ID
 function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
 
-// Отправка сообщения всем клиентам
 function broadcast(message, sender = null) {
     const messageStr = JSON.stringify(message);
     clients.forEach((_, client) => {
@@ -28,7 +24,6 @@ function broadcast(message, sender = null) {
     });
 }
 
-// Отправка списка пользователей всем
 function broadcastUserList() {
     const users = Array.from(clients.values()).map(client => ({
         name: client.name,
@@ -51,10 +46,8 @@ wss.on('connection', (ws) => {
     console.log('Новое подключение');
     let clientId = generateId();
     
-    // Сохраняем клиента с временным ID до получения имени
     clients.set(ws, { id: clientId, name: 'Аноним' });
     
-    // Отправляем новому клиенту его ID
     ws.send(JSON.stringify({
         type: 'system',
         message: 'Подключение установлено',
@@ -67,7 +60,6 @@ wss.on('connection', (ws) => {
             
             switch(message.type) {
                 case 'join':
-                    // Пользователь представляется
                     const oldData = clients.get(ws) || { id: clientId };
                     const newName = message.name || 'Аноним';
                     
@@ -76,24 +68,20 @@ wss.on('connection', (ws) => {
                         name: newName
                     });
                     
-                    // Уведомляем всех о новом пользователе
                     broadcast({
                         type: 'notification',
                         text: `${newName} присоединился к чату`
                     }, ws);
                     
-                    // Отправляем подтверждение пользователю
                     ws.send(JSON.stringify({
                         type: 'system',
                         message: `Добро пожаловать, ${newName}!`
                     }));
                     
-                    // Обновляем список пользователей
                     broadcastUserList();
                     break;
                     
                 case 'message':
-                    // Обычное сообщение
                     const clientInfo = clients.get(ws);
                     if (clientInfo) {
                         const messageData = {
@@ -104,10 +92,8 @@ wss.on('connection', (ws) => {
                             time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
                         };
                         
-                        // Отправляем всем
                         broadcast(messageData);
                         
-                        // Отправляем подтверждение отправителю
                         ws.send(JSON.stringify({
                             type: 'self_message',
                             ...messageData
@@ -116,7 +102,6 @@ wss.on('connection', (ws) => {
                     break;
                     
                 case 'typing':
-                    // Индикатор печатания
                     const typingUser = clients.get(ws);
                     if (typingUser) {
                         broadcast({
@@ -137,21 +122,14 @@ wss.on('connection', (ws) => {
         if (client) {
             console.log(`Клиент ${client.name} отключился`);
             
-            // Уведомляем всех об уходе пользователя
             broadcast({
                 type: 'notification',
                 text: `${client.name} покинул чат`
             });
             
             clients.delete(ws);
-            
-            // Обновляем список пользователей
             broadcastUserList();
         }
-    });
-
-    ws.on('error', (error) => {
-        console.error('Ошибка WebSocket:', error);
     });
 });
 
